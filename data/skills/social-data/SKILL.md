@@ -123,12 +123,12 @@ For performance analysis:
 ## External Dependencies
 
 - Python 3 for bundled scripts.
-- Fetch mode may need `requests`, `browser_cookie3`, `curl_cffi`, `xreach`, `yt-dlp`, or a local Xiaohongshu proxy depending on platform.
+- Fetch mode may need `requests`, `browser_cookie3`, `curl_cffi`, `xreach`, `yt-dlp`, an optional Xquik API key for Twitter/X, or a local Xiaohongshu proxy depending on platform.
 - Analysis mode needs user-provided JSON, table data, or exported platform/campaign metrics.
 
 ## Limits And Known Issues
 
-- Fetch coverage varies by platform, login state, rate limits, anti-bot behavior, and local dependencies.
+- Fetch coverage varies by platform, login state, API keys, rate limits, anti-bot behavior, and local dependencies.
 - Public fetches are samples, not complete platform analytics.
 - Anonymous Reddit/Bilibili recall can be weak; browser login cookies may improve results.
 - Xiaohongshu requires an external local proxy service at `http://localhost:18060`.

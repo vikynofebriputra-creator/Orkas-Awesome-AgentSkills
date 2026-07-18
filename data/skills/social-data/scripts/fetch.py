@@ -65,7 +65,7 @@ def main(argv):
 
     keywords = [k.strip() for k in args.keywords.split(',') if k.strip()]
     if not keywords:
-        raise SystemExit(json.dumps({'ok': False, 'error': 'no keywords supplied'}))
+        raise ValueError('no keywords supplied')
 
     config = {
         f'{args.platform}_keywords': keywords,
@@ -90,12 +90,23 @@ def main(argv):
     print(json.dumps(out, ensure_ascii=False))
 
 
-if __name__ == '__main__':
+def run_cli(argv):
+    """Run the fetch command and preserve the documented JSON error shape."""
     try:
-        main(sys.argv[1:])
+        main(argv)
+        return 0
     except SystemExit:
         raise
-    except Exception as e:
-        err = {'ok': False, 'error': f'{type(e).__name__}: {e}'}
-        print(json.dumps(err, ensure_ascii=False), file=sys.stderr)
-        sys.exit(1)
+    except Exception as error:
+        platform = argv[0] if argv and argv[0] in FETCHERS else 'unknown'
+        payload = {
+            'ok': False,
+            'error': f'{type(error).__name__}: {error}',
+            'platform': platform,
+        }
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(run_cli(sys.argv[1:]))

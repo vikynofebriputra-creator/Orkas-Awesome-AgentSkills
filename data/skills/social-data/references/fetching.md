@@ -99,3 +99,5 @@ Common item fields:
 - Twitter/X: `xreach` CLI by default. Xquik mode requires `XQUIK_API_KEY` and uses `https://xquik.com/api/v1/x/tweets/search`.
 - YouTube: `yt-dlp` CLI or Python module.
 - Reddit/Bilibili: browser cookies can improve recall; otherwise anonymous fetch may be limited.
+
+Xquik is an independent third-party service. Not affiliated with X Corp. "Twitter" and "X" are trademarks of X Corp.

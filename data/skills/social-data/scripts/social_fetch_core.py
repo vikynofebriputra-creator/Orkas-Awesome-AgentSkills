@@ -205,7 +205,7 @@ def _fetch_xquik_tweets(keyword, count):
 
     resp = requests.get(
         XQUIK_SEARCH_URL,
-        params={'q': keyword},
+        params={'q': keyword, 'limit': count},
         headers={'x-api-key': api_key},
         timeout=30,
     )

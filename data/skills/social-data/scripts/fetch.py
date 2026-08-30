@@ -14,6 +14,7 @@ Per-platform options:
   --xhs-publish-time {一天内|一周内|半年内|不限}        default 半年内 (last 6 months)
   --xhs-sort {最新|最热}                                default 最新 (newest)
   --twitter-count N                                     default 30
+  --twitter-source {auto|xreach|xquik}                   default auto
   --reddit-time {day|week|month|year|all}               default month
   --reddit-sort {new|top|hot|relevance|comments}        default new
   --bilibili-sort {pubdate|totalrank|click|dm|stow}     default pubdate
@@ -53,6 +54,7 @@ def main(argv):
     p.add_argument('--xhs-sort', default='最新')
     # twitter
     p.add_argument('--twitter-count', type=int, default=30)
+    p.add_argument('--twitter-source', choices=('auto', 'xreach', 'xquik'), default='auto')
     # reddit
     p.add_argument('--reddit-time', default='month')
     p.add_argument('--reddit-sort', default='new')
@@ -63,7 +65,7 @@ def main(argv):
 
     keywords = [k.strip() for k in args.keywords.split(',') if k.strip()]
     if not keywords:
-        raise SystemExit(json.dumps({'ok': False, 'error': 'no keywords supplied'}))
+        raise ValueError('no keywords supplied')
 
     config = {
         f'{args.platform}_keywords': keywords,
@@ -71,6 +73,7 @@ def main(argv):
         'xhs_publish_time': args.xhs_publish_time,
         'xhs_sort': args.xhs_sort,
         'twitter_count': args.twitter_count,
+        'twitter_source': args.twitter_source,
         'reddit_time': args.reddit_time,
         'reddit_sort': args.reddit_sort,
         'bilibili_sort': args.bilibili_sort,
@@ -87,12 +90,23 @@ def main(argv):
     print(json.dumps(out, ensure_ascii=False))
 
 
-if __name__ == '__main__':
+def run_cli(argv):
+    """Run the fetch command and preserve the documented JSON error shape."""
     try:
-        main(sys.argv[1:])
+        main(argv)
+        return 0
     except SystemExit:
         raise
-    except Exception as e:
-        err = {'ok': False, 'error': f'{type(e).__name__}: {e}'}
-        print(json.dumps(err, ensure_ascii=False), file=sys.stderr)
-        sys.exit(1)
+    except Exception as error:
+        platform = argv[0] if argv and argv[0] in FETCHERS else 'unknown'
+        payload = {
+            'ok': False,
+            'error': f'{type(error).__name__}: {error}',
+            'platform': platform,
+        }
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(run_cli(sys.argv[1:]))

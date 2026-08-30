@@ -23,6 +23,7 @@ except ImportError:
     _CURL_CFFI_OK = False
 
 XHS_BASE = 'http://localhost:18060'
+XQUIK_SEARCH_URL = 'https://xquik.com/api/v1/x/tweets/search'
 XHS_REQUEST_TIMEOUT = 70   # Slightly above the server's internal 60s timeout, so we get a 500 instead of context-canceled
 XHS_DETAIL_WORKERS = 4     # Number of threads used to fetch detail concurrently
 DEFAULT_YOUTUBE_META_COUNT = 8
@@ -147,6 +148,70 @@ def add_diag(diag, **kwargs):
 
 def xreach_cmd(keyword, count=30):
     return ['xreach', 'search', keyword, '--json', '-n', str(count)]
+
+
+def _xquik_items(payload):
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+
+    for key in ('items', 'tweets', 'results'):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return value
+
+    data = payload.get('data')
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ('items', 'tweets', 'results'):
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+    return []
+
+
+def _xquik_author(item):
+    author = item.get('author')
+    if isinstance(author, dict):
+        return author.get('username') or author.get('handle') or author.get('name') or ''
+    return item.get('username') or item.get('screen_name') or item.get('author_username') or ''
+
+
+def _xquik_tweet_id(item):
+    return str(item.get('id') or item.get('tweetId') or item.get('tweet_id') or '')
+
+
+def _normalise_xquik_tweet(item, keyword):
+    tid = _xquik_tweet_id(item)
+    return {
+        'platform': 'Twitter/X', 'id': tid, 'url': item.get('url') or f'https://x.com/i/web/status/{tid}',
+        'title': '', 'author': _xquik_author(item),
+        'likes': to_int(item.get('likeCount') or item.get('likes') or item.get('favoriteCount') or 0),
+        'collects': 0,
+        'comments': to_int(item.get('replyCount') or item.get('replies') or item.get('comments') or 0),
+        'retweets': to_int(item.get('retweetCount') or item.get('retweets') or 0),
+        'views': to_int(item.get('viewCount') or item.get('views') or 0), 'keyword_hit': keyword,
+        'content': item.get('text') or item.get('fullText') or item.get('content') or '',
+        'comments_list': [],
+    }
+
+
+def _fetch_xquik_tweets(keyword, count):
+    api_key = os.environ.get('XQUIK_API_KEY', '').strip()
+    if not api_key:
+        raise RuntimeError('XQUIK_API_KEY is required for twitter_source=xquik')
+
+    resp = requests.get(
+        XQUIK_SEARCH_URL,
+        params={'q': keyword, 'limit': count},
+        headers={'x-api-key': api_key},
+        timeout=30,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f'Xquik HTTP {resp.status_code}')
+    return _xquik_items(resp.json())[:count]
 
 
 def yt_dlp_cmd(*args):
@@ -347,20 +412,46 @@ def fetch_twitter(config):
     log('🔵 Fetching Twitter/X...')
     diag = make_diag('Twitter/X')
     seen, tweets = set(), []
+    reply_fetchable = set()
     twitter_count = max(1, min(100, int(config.get('twitter_count', 30))))
+    twitter_source = config.get('twitter_source', 'auto')
     for kw in config['twitter_keywords']:
         log(f'  → {kw}')
+        if twitter_source in ('auto', 'xquik') and (twitter_source == 'xquik' or os.environ.get('XQUIK_API_KEY', '').strip()):
+            try:
+                items = _fetch_xquik_tweets(kw, twitter_count)
+                add_diag(diag, raw_hits=diag['raw_hits'] + len(items), detail={'keyword': kw, 'raw_hits': len(items), 'source': 'xquik'})
+                log(f'    {len(items)} items from Xquik')
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    tweet = _normalise_xquik_tweet(item, kw)
+                    tid = tweet.get('id', '')
+                    if not tid or tid in seen:
+                        continue
+                    seen.add(tid)
+                    tweets.append(tweet)
+                time.sleep(2)
+                continue
+            except Exception as e:
+                add_diag(diag, failed=diag['failed'] + 1, errors=f'{kw}: xquik: {e}')
+                log(f'    Xquik failed: {e}')
+                if twitter_source == 'xquik':
+                    time.sleep(2)
+                    continue
+
         try:
             result = subprocess.run(xreach_cmd(kw, twitter_count), capture_output=True, text=True, timeout=90)
             if result.returncode == 0 and result.stdout.strip():
                 items = json.loads(result.stdout).get('items', [])
-                add_diag(diag, raw_hits=diag['raw_hits'] + len(items), detail={'keyword': kw, 'raw_hits': len(items)})
+                add_diag(diag, raw_hits=diag['raw_hits'] + len(items), detail={'keyword': kw, 'raw_hits': len(items), 'source': 'xreach'})
                 log(f'    {len(items)} items')
                 for item in items:
                     tid = item.get('id', '')
                     if not tid or tid in seen:
                         continue
                     seen.add(tid)
+                    reply_fetchable.add(tid)
                     tweets.append({
                         'platform': 'Twitter/X', 'id': tid, 'url': f'https://x.com/i/web/status/{tid}',
                         'title': '', 'author': item.get('username', ''),
@@ -384,8 +475,9 @@ def fetch_twitter(config):
     tweets.sort(key=lambda x: (-x.get('comments', 0), -x.get('likes', 0)))
     max_detail = max(1, int(config.get('max_detail') or 30))
 
-    log(f'  📥 Fetching {min(len(tweets), max_detail)} tweet replies...')
-    for t in tweets[:max_detail]:
+    detail_targets = [t for t in tweets if t.get('id') in reply_fetchable][:max_detail]
+    log(f'  📥 Fetching {len(detail_targets)} tweet replies...')
+    for t in detail_targets:
         try:
             t['comments_list'] = _twitter_fetch_comments(t['url'])
         except Exception as e:

